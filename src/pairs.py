@@ -2,11 +2,12 @@ import os
 import dataset
 import random
 
-char_dict = dataset.load_character_images('data/images_background_small1')
+char_dict = dataset.load_character_images('data/images_background_small1/images_background_small1')
 
 # what are doing exactly?
 # we are trying to create labelled data, of form [img1, img2, 0 or 1]
-# 0 means different 1 means same
+#
+#  0 means different 1 means same
 # as input we are using load_char function from dataset.py
 # this gives us a dictionary of {image name: location} is basically like a vector table
 #
