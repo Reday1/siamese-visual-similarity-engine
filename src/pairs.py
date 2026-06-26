@@ -2,7 +2,6 @@ import os
 import dataset
 import random
 
-char_dict = dataset.load_character_images('data/images_background_small1/images_background_small1')
 
 # what are doing exactly?
 # we are trying to create labelled data, of form [img1, img2, 0 or 1]
@@ -52,7 +51,8 @@ def make_pairs(char_dict, num_pairs=20):
 
     random.shuffle(all_pairs)
     return all_pairs
-
-pairs = make_pairs(char_dict, num_pairs=20)
-print(len(pairs))
-print(pairs[0])
+#--sanity check--
+# char_dict = dataset.load_character_images('data/images_background_small1/images_background_small1')
+# pairs = make_pairs(char_dict, num_pairs=20)
+# print(len(pairs))
+# print(pairs[0])

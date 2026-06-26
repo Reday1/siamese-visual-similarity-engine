@@ -51,14 +51,14 @@ def build_siamese_model(enc):
         siamese_model = Model([img1, img2], distance)  
         return siamese_model
 
-#initialize encoder
-enc = build_encoder(freeze_backbone=True)
-siamese = build_siamese_model(enc)
+#--sanity check--
+# enc = build_encoder(freeze_backbone=True)
+# siamese = build_siamese_model(enc)
 
-dummy_img1 = np.random.rand(2,224,224,3).astype('float32')
-dummy_img2 = np.random.rand(2,224,224,3).astype('float32')
+# dummy_img1 = np.random.rand(2,224,224,3).astype('float32')
+# dummy_img2 = np.random.rand(2,224,224,3).astype('float32')
 
-distance = siamese([dummy_img1, dummy_img2])
+# distance = siamese([dummy_img1, dummy_img2])
 
-print(f"output shape {distance.shape}")
-print(f"calculated distance:{distance.numpy()}")
+# print(f"output shape {distance.shape}")
+# print(f"calculated distance:{distance.numpy()}")
