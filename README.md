@@ -1,153 +1,63 @@
-# Siamese Visual Similarity Engine
+# Siamese Network Image Retrieval — Project README
 
-A visual similarity retrieval system built with Siamese Networks. Instead of training a network to classify images into fixed categories, this project trains it to learn a *similarity function* — given two images, it learns whether they are visually alike or not, and produces embeddings that can be compared directly via distance.
+## Overview
+This project trains a Siamese neural network to learn an embedding space where visually/semantically similar images land close together and dissimilar images land far apart — without ever training on a "retrieval" task directly. Once trained, the encoder half of the network is used to embed a full image dataset and power nearest-neighbor image retrieval, evaluated with precision@k and visualized via t-SNE/UMAP and similarity grids.
 
-## Core Idea
+Two datasets are used in sequence:
+1. **Omniglot** — initial proof-of-concept, full pipeline built and validated here first
+2. **CUB-200-2011** — fine-grained bird species, applied second once the pipeline is proven end to end
 
-A single CNN backbone (shared weights) is used twice — once for each image in a pair. The two resulting embeddings are compared using a distance metric. The network is trained so that:
+## Team split
 
-- Similar images (positive pairs) end up close together in embedding space
-- Dissimilar images (negative pairs) end up far apart, up to a margin
+| | Person A — Pairs & Model | Person B — Index, Retrieval, Eval & Viz |
+|---|---|---|
+| Owns | Dataset, pair generation, Siamese architecture, training loop, contrastive loss | Embedding index, k-NN retrieval, metrics, t-SNE/UMAP, similarity grids, report |
+| Hands off | A trained encoder checkpoint + a fixed `splits.json` | The final demo (CLI/notebook) + evaluation report |
+| Key files | `dataset.py`, `pairs.py`, `model.py`, `train.py` | `embed_index.py`, `retrieval.py`, `evaluate.py`, `visualize.py` |
 
-Once trained, any new image can be embedded and compared against a stored index of embeddings to retrieve its nearest visual neighbors.
+**Handoff contract:** Person A delivers `encoder_best.keras`, `splits.json`, and a written preprocessing spec (image size, resize method, normalization mean/std). Person B must reproduce this preprocessing exactly at inference time — any mismatch silently degrades retrieval quality without throwing an error.
 
-![Architecture Diagram](ADD_LINK_HERE)
+---
 
-## Tech Stack
+## Current status
 
-- PyTorch
-- OpenCV
-- ResNet18 (backbone, pretrained)
-- FAISS (or NumPy, for smaller datasets) for the embedding index
-- scikit-learn / UMAP for embedding space visualization
+- [x] Trained once on Omniglot (training PNG generated)
+- [x] Uploaded environment/code to Kaggle
+- [ ] **Bug:** early stopping and best-checkpoint saving are keyed off *training* loss instead of *validation* loss — needs fix before this run is trustworthy
+- [ ] `splits.json` not yet created for Omniglot
+- [ ] Distance-histogram sanity check (positive vs. negative pair distances) not yet added to training loop
+- [ ] CUB-200 pipeline not started — deferred until Omniglot pipeline is fully working end to end
 
-## Pipeline
+**Working order:** finish the entire pipeline (training fixes → splits.json → retrain → handoff → Person B's retrieval/eval/viz) on Omniglot first. Only once that runs cleanly end to end does the team move to CUB-200, at which point it's primarily a data/encoder swap rather than new pipeline work.
 
-1. **Data preparation** — Organize a dataset with natural similarity groups (e.g., product categories, face identities, fashion items). Generate positive pairs (same class) and negative pairs (different class).
-2. **Siamese model** — A shared ResNet18 encoder plus a small projection head, called twice per pair.
-3. **Contrastive loss training** — Minimizes embedding distance for positive pairs, maximizes it (up to a margin) for negative pairs.
-4. **Embedding index** — Every image in the dataset is passed through the trained encoder and stored as a vector.
-5. **Retrieval** — A query image is embedded, then compared against the index to return the top-k nearest matches.
-6. **Evaluation** — Precision@k, embedding space visualization, and qualitative similarity grids.
+---
 
-## Repository Structure
-siamese-visual-similarity-engine/
+## Person A — Data Pairing + Siamese Model + Training
 
-├── data/
-
-│   └── splits.json
-
-├── src/
-
-│   ├── dataset.py
-
-│   ├── pairs.py
-
-│   ├── model.py
-
-│   ├── train.py
-
-│   ├── embed_index.py
-
-│   ├── retrieval.py
-
-│   ├── evaluate.py
-
-│   └── visualize.py
-
-├── checkpoints/
-
-│   └── encoder.pt
-
-├── outputs/
-
-│   ├── embeddings.npy
-
-│   ├── labels.npy
-
-│   └── filepaths.json
-
-├── notebooks/
-
-│   └── demo.ipynb
-
-├── requirements.txt
-
-└── README.md
-
-## Setup
-
-```bash
-git clone https://github.com/<your-username>/siamese-visual-similarity-engine.git
-cd siamese-visual-similarity-engine
-pip install -r requirements.txt
+### 1. Dataset & splits
+- Dataset has natural similarity groups (Omniglot: characters within alphabets; CUB-200: bird species)
+- Split by *class*, not just by image, where the goal is generalization to unseen classes — otherwise retrieval evaluation later leaks
+- Save the split as a static manifest, `splits.json`:
+```json
+  [
+    {"filepath": "path/to/image.png", "class_id": 12, "split": "train"},
+    {"filepath": "path/to/image2.png", "class_id": 12, "split": "val"}
+  ]
 ```
+  This is the single source of truth for both pair generation (train rows only) and Person B's evaluation (test rows only). Don't regenerate it ad hoc.
 
-## Training
+### 2. Pair generation (`pairs.py`)
+- Positive pairs: random same-class image pairs
+- Negative pairs: random different-class pairs (optionally hard negatives — visually similar but different class — once basic training works)
+- Balance ratio ~1:1 positive:negative per batch
+- Wrap in a custom `Dataset`/`DataLoader` returning `(img1, img2, label)`, where label = 1 (similar) / 0 (dissimilar)
+- Pull only from `splits.json`'s `train` rows
 
-```bash
-python src/train.py --data_dir data/ --epochs 30 --margin 1.0 --batch_size 64
-```
+### 3. Architecture (`model.py`)
+- Backbone: ResNet18 (pretrained, drop the final FC layer)
+- Projection head: `Linear(512→256) → ReLU → Linear(256→128)`
+- Single `forward_once(x)` method; the "Siamese" call invokes it twice with shared weights
+- L2-normalize the output embedding (keeps cosine distance well-behaved downstream)
 
-This trains the Siamese encoder using contrastive loss and saves the resulting weights to `checkpoints/encoder.pt`.
-
-![Training Loss Curve](ADD_LINK_HERE)
-
-![Positive vs Negative Distance Distribution](ADD_LINK_HERE)
-
-## Building the Embedding Index
-
-```bash
-python src/embed_index.py --checkpoint checkpoints/encoder.pt --data_dir data/ --out outputs/
-```
-
-This embeds every image in the dataset and stores the resulting vectors, labels, and filepaths for later retrieval.
-
-## Running a Similarity Search
-
-```bash
-python src/retrieval.py --query path/to/query_image.jpg --k 5
-```
-
-Returns the top-5 most visually similar images from the indexed dataset, along with their distances.
-
-![Similarity Search Result Grid](ADD_LINK_HERE)
-
-## Evaluation
-
-```bash
-python src/evaluate.py --embeddings outputs/embeddings.npy --labels outputs/labels.npy
-```
-
-Reports Precision@k across the test set, broken down by class.
-
-| Metric | Score |
-|---|---|
-| Precision@1 | ADD_VALUE |
-| Precision@5 | ADD_VALUE |
-| Precision@10 | ADD_VALUE |
-
-## Embedding Space Visualization
-
-```bash
-python src/visualize.py --embeddings outputs/embeddings.npy --labels outputs/labels.npy
-```
-
-Projects the learned embedding space into two dimensions to check whether visually similar classes naturally cluster together, despite the model never being trained on class labels directly.
-
-![t-SNE / UMAP Embedding Visualization](ADD_LINK_HERE)
-
-## Results Summary
-
-A short qualitative summary of what worked well, what classes retrieved poorly, and any notes on hard-negative mining or margin tuning go here.
-
-## Team
-
-| Role | Responsibility |
-|---|---|
-| Person A | Data pairing pipeline, Siamese model architecture, contrastive loss training |
-| Person B | Embedding index, retrieval logic, evaluation metrics, visualizations |
-
-## License
-
-MIT
+### 4. Training (`train.py`)
+- Contrastive loss:
