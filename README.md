@@ -1,153 +1,349 @@
 # Siamese Visual Similarity Engine
 
-A visual similarity retrieval system built with Siamese Networks. Instead of training a network to classify images into fixed categories, this project trains it to learn a *similarity function* — given two images, it learns whether they are visually alike or not, and produces embeddings that can be compared directly via distance.
+A zero-shot visual similarity retrieval system using a Siamese Neural Network trained with contrastive learning.
 
-## Core Idea
+Instead of classifying an image into fixed categories, the model learns an embedding space where visually similar images are close together. This allows retrieval of similar images from species that were never seen during training.
 
-A single CNN backbone (shared weights) is used twice — once for each image in a pair. The two resulting embeddings are compared using a distance metric. The network is trained so that:
+---
 
-- Similar images (positive pairs) end up close together in embedding space
-- Dissimilar images (negative pairs) end up far apart, up to a margin
+## Overview
 
-Once trained, any new image can be embedded and compared against a stored index of embeddings to retrieve its nearest visual neighbors.
+Traditional classifiers answer:
 
-![Architecture Diagram](ADD_LINK_HERE)
-
-## Tech Stack
-
-- PyTorch
-- OpenCV
-- ResNet18 (backbone, pretrained)
-- FAISS (or NumPy, for smaller datasets) for the embedding index
-- scikit-learn / UMAP for embedding space visualization
-
-## Pipeline
-
-1. **Data preparation** — Organize a dataset with natural similarity groups (e.g., product categories, face identities, fashion items). Generate positive pairs (same class) and negative pairs (different class).
-2. **Siamese model** — A shared ResNet18 encoder plus a small projection head, called twice per pair.
-3. **Contrastive loss training** — Minimizes embedding distance for positive pairs, maximizes it (up to a margin) for negative pairs.
-4. **Embedding index** — Every image in the dataset is passed through the trained encoder and stored as a vector.
-5. **Retrieval** — A query image is embedded, then compared against the index to return the top-k nearest matches.
-6. **Evaluation** — Precision@k, embedding space visualization, and qualitative similarity grids.
-
-## Repository Structure
-siamese-visual-similarity-engine/
-
-├── data/
-
-│   └── splits.json
-
-├── src/
-
-│   ├── dataset.py
-
-│   ├── pairs.py
-
-│   ├── model.py
-
-│   ├── train.py
-
-│   ├── embed_index.py
-
-│   ├── retrieval.py
-
-│   ├── evaluate.py
-
-│   └── visualize.py
-
-├── checkpoints/
-
-│   └── encoder.pt
-
-├── outputs/
-
-│   ├── embeddings.npy
-
-│   ├── labels.npy
-
-│   └── filepaths.json
-
-├── notebooks/
-
-│   └── demo.ipynb
-
-├── requirements.txt
-
-└── README.md
-
-## Setup
-
-```bash
-git clone https://github.com/<your-username>/siamese-visual-similarity-engine.git
-cd siamese-visual-similarity-engine
-pip install -r requirements.txt
+```
+What class is this image?
 ```
 
-## Training
+This project answers:
 
-```bash
-python src/train.py --data_dir data/ --epochs 30 --margin 1.0 --batch_size 64
+```
+Which images are visually most similar?
 ```
 
-This trains the Siamese encoder using contrastive loss and saves the resulting weights to `checkpoints/encoder.pt`.
+The system:
 
-![Training Loss Curve](ADD_LINK_HERE)
+1. Encodes an input image into a learned feature vector.
+2. Compares it against a database of stored embeddings.
+3. Retrieves nearest neighbors based on embedding distance.
 
-![Positive vs Negative Distance Distribution](ADD_LINK_HERE)
+This is similar in principle to systems used for:
 
-## Building the Embedding Index
+- image search
+- face verification
+- product retrieval
+- visual recommendation systems
 
-```bash
-python src/embed_index.py --checkpoint checkpoints/encoder.pt --data_dir data/ --out outputs/
+---
+
+## Dataset
+
+Dataset:
+
+**CUB-200-2011 Birds Dataset**
+
+- 200 fine-grained bird species
+- ~11k images
+
+The split is performed by species, not images.
+
+Example:
+
+```
+Train:
+species A, B, C
+
+Test:
+species X, Y, Z
 ```
 
-This embeds every image in the dataset and stores the resulting vectors, labels, and filepaths for later retrieval.
+Test species are never shown during training.
 
-## Running a Similarity Search
+This evaluates whether the network learned a general similarity function instead of memorizing classes.
 
-```bash
-python src/retrieval.py --query path/to/query_image.jpg --k 5
+---
+
+## Model Architecture
+
+### Backbone
+
+```
+ResNet50
+(ImageNet pretrained)
+↓
+Global Average Pooling
 ```
 
-Returns the top-5 most visually similar images from the indexed dataset, along with their distances.
+The backbone is fine-tuned during training.
 
-![Similarity Search Result Grid](ADD_LINK_HERE)
+### Embedding Head
+
+```
+Dense(512)
+ReLU
+Dropout(0.3)
+
+Dense(256)
+ReLU
+Dropout(0.3)
+
+Dense(128)
+
+L2 Normalization
+```
+
+Final output:
+
+```
+128-dimensional embedding vector
+```
+
+---
+
+## Siamese Network
+
+Two images are passed through the same encoder:
+
+```
+Image A ──┐
+          │
+          ├── Shared Encoder ── Embedding A
+          │
+
+Image B ──┘
+                 |
+                 v
+
+        Euclidean Distance
+
+                 |
+                 v
+
+          Contrastive Loss
+```
+
+Loss:
+
+```
+Contrastive Loss
+Margin = 1.0
+```
+
+The model learns:
+
+- pull similar images closer
+- push different images apart
+
+---
+
+## Training Details
+
+Training was performed with progressive fine tuning.
+
+### Stage 1
+
+Frozen ResNet50:
+
+```
+Train embedding head only
+```
+
+### Stage 2
+
+Gradually unfreeze deeper ResNet layers:
+
+```
+Epoch 5  → +5 layers
+Epoch 8  → +5 layers
+Epoch 11 → +5 layers
+Epoch 14 → +5 layers
+```
+
+Batch Normalization layers remained frozen.
+
+Learning rates:
+
+```
+1e-5
+5e-6
+2e-6
+1e-6
+```
+
+Additional techniques:
+
+- online hard negative mining
+- checkpointing on validation loss
+- progressive backbone unfreezing
+
+---
+
+## Retrieval Pipeline
+
+After training:
+
+```
+Images
+  |
+  v
+
+Encoder
+
+  |
+  v
+
+128-D embeddings
+
+  |
+  v
+
+embeddings.npy
+```
+
+During inference:
+
+```
+Query Image
+
+      |
+
+Encoder
+
+      |
+
+Query Embedding
+
+      |
+
+Euclidean Distance Search
+
+      |
+
+Top-K Similar Images
+```
+
+The model does not retrain when new images are added.
+
+---
+
+## Project Structure
+
+```
+src/
+
+model.py
+    Network architecture
+
+preprocessing.py
+    Image loading pipeline
+
+build_splits.py
+    Dataset manifest generation
+
+embed_index.py
+    Builds embedding database
+
+retrieval.py
+    Nearest neighbor search
+
+evaluate.py
+    Retrieval metrics
+
+visualize.py
+    Retrieval visualization
+
+
+app/
+
+streamlit_app.py
+    Web interface
+```
+
+---
 
 ## Evaluation
 
-```bash
-python src/evaluate.py --embeddings outputs/embeddings.npy --labels outputs/labels.npy
+Evaluation is performed only on unseen test species.
+
+The model searches through test embeddings and retrieves nearest neighbors.
+
+Results:
+
+```
+Precision@1: 34.6%
+
+Precision@5: 28.9%
 ```
 
-Reports Precision@k across the test set, broken down by class.
+The task is zero-shot fine-grained retrieval, not classification.
 
-| Metric | Score |
-|---|---|
-| Precision@1 | ADD_VALUE |
-| Precision@5 | ADD_VALUE |
-| Precision@10 | ADD_VALUE |
+Random retrieval among ~40 unseen species would be approximately:
 
-## Embedding Space Visualization
-
-```bash
-python src/visualize.py --embeddings outputs/embeddings.npy --labels outputs/labels.npy
+```
+~2.5%
 ```
 
-Projects the learned embedding space into two dimensions to check whether visually similar classes naturally cluster together, despite the model never being trained on class labels directly.
+---
 
-![t-SNE / UMAP Embedding Visualization](ADD_LINK_HERE)
+## Example Retrieval
 
-## Results Summary
+Input:
 
-A short qualitative summary of what worked well, what classes retrieved poorly, and any notes on hard-negative mining or margin tuning go here.
+```
+Bird image
+```
 
-## Team
+Output:
 
-| Role | Responsibility |
-|---|---|
-| Person A | Data pairing pipeline, Siamese model architecture, contrastive loss training |
-| Person B | Embedding index, retrieval logic, evaluation metrics, visualizations |
+```
+Top visually similar birds:
 
-## License
+1. species A
+2. species A
+3. visually similar species
+4. visually similar species
+5. visually similar species
+```
 
-MIT
+Even incorrect species predictions often correspond to visually similar birds.
+
+---
+
+## Technologies
+
+- Python
+- TensorFlow / Keras
+- ResNet50
+- NumPy
+- PIL
+- Streamlit
+- Matplotlib
+
+---
+
+## Key Features
+
+- Zero-shot retrieval
+- Siamese neural network
+- Contrastive metric learning
+- Fine-tuned CNN backbone
+- Hard-negative mining
+- Embedding database search
+- Interactive image retrieval demo
+
+---
+
+## Future Improvements
+
+- Triplet loss / supervised contrastive learning
+- FAISS vector search
+- Larger embedding gallery
+- Vision Transformer backbone
+- Web deployment
+
+---
+
+## Purpose
+
+This project demonstrates learning a reusable visual similarity function rather than a fixed image classifier.
+
+The trained encoder can compare new images without requiring retraining for new categories.
