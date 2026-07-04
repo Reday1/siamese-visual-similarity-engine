@@ -39,9 +39,11 @@ def build_siamese_model(enc):
     return Model([img1, img2], distance)
 
 if __name__ == "__main__":
+    from pathlib import Path
+    ROOT = Path(__file__).resolve().parent.parent
     enc = build_encoder()
     model = build_siamese_model(enc)
-    model.load_weights('/home/h/Documents/GitHub/siamese-visual-similarity-engine/artifacts/best_model.weights.h5')
+    model.load_weights(str(ROOT / "artifacts" / "best_model.weights.h5"))
     encoder = model.get_layer('encoder')
     print(f'model loaded')
     print(encoder.output_shape)

@@ -1,14 +1,16 @@
 import json
 import os
+from pathlib import Path
 from retrieval import retrieve
 
 # we are going to asses when we give an input of a bird does our model give similar results or not 
 # top k are 5 we expect the precision value as a ration of int / 5 whether similar birds came out of 5
 #assesing on test split, train never saw these species
 
-DATA_ROOT = "/home/h/Documents/GitHub/siamese-visual-similarity-engine/data/CUB_200_2011"
+ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = str(ROOT / "data" / "CUB_200_2011")
 
-INDEX_PATH = "/home/h/Documents/GitHub/siamese-visual-similarity-engine/artifacts/image_index.json"
+INDEX_PATH = ROOT / "artifacts" / "image_index.json"
 
 
 with open(INDEX_PATH, "r") as f:

@@ -2,14 +2,15 @@ import os
 import random
 import json
 import matplotlib.pyplot as plt
+from pathlib import Path
 from PIL import Image
 
 from retrieval import retrieve
 
+ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = str(ROOT / "data" / "CUB_200_2011")
 
-DATA_ROOT = "/home/h/Documents/GitHub/siamese-visual-similarity-engine/data/CUB_200_2011"
-
-INDEX_PATH = "/home/h/Documents/GitHub/siamese-visual-similarity-engine/artifacts/image_index.json"
+INDEX_PATH = ROOT / "artifacts" / "image_index.json"
 
 
 with open(INDEX_PATH, "r") as f:
