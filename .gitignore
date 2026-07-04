@@ -1,0 +1,38 @@
+# Dataset
+data/
+CUB_200_2011.tgz
+
+# Model weights
+*.weights.h5
+*.h5
+*.hdf5
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Conda / virtualenv
+.conda/
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Training artifacts
+*.png
