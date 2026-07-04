@@ -88,11 +88,16 @@ if uploaded is not None:
         tmp_path = tmp.name
 
     # ── Retrieve ─────────────────────────────────────────────────────────
-    with st.spinner("Computing embedding & searching..."):
-        try:
+    try:
+        with st.spinner("Computing embedding & searching..."):
             results = retrieve(tmp_path, k=k)
-        finally:
-            os.unlink(tmp_path)  # clean up regardless
+    except Exception as e:
+        os.unlink(tmp_path)
+        st.error(f"Could not process this image. Make sure it's a valid JPEG or PNG.\n\nDetails: {e}")
+        st.stop()
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
     # ── Display results ──────────────────────────────────────────────────
     st.subheader(f"Top {len(results)} similar birds")
@@ -100,17 +105,22 @@ if uploaded is not None:
 
     for i, item in enumerate(results):
         col = cols[i % len(cols)]
-        img_path = DATA_DIR / item["path"]
         species_raw = item["species"]
         # "062.Herring_Gull" -> "Herring Gull"
         species_display = species_raw.split(".", 1)[-1].replace("_", " ")
         distance = item["distance"]
 
         with col:
-            if img_path.exists():
-                st.image(str(img_path), use_container_width=True)
+            # Prefer remote HF URL (works on Cloud without storing images in repo)
+            # Fall back to local path for local dev
+            if "url" in item:
+                st.image(item["url"], use_container_width=True)
             else:
-                st.warning(f"Image not found:\n{img_path.name}")
+                img_path = DATA_DIR / item["path"]
+                if img_path.exists():
+                    st.image(str(img_path), use_container_width=True)
+                else:
+                    st.warning(f"Image not found:\n{img_path.name}")
 
             st.markdown(
                 f'<p class="species-name">{species_display}</p>',
