@@ -1,12 +1,6 @@
-# Core ML
-tensorflow-cpu==2.21.0
-numpy==2.4.6
-scikit-learn==1.9.0
-
-# App
-streamlit==1.58.0
-
-# Data / viz (used by training notebook & evaluation scripts)
-matplotlib==3.11.0
-tqdm==4.68.3
-pillow==12.2.0
+streamlit
+tensorflow-cpu==2.20.0
+numpy
+pillow
+matplotlib
+scikit-learn
