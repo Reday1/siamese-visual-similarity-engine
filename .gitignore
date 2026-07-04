@@ -1,4 +1,87 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.venv/
+*.conda/
+
+# Environment files
+.env
+.env.*
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# keep notebooks only if you want
+# *.ipynb
+
+
+# =========================
+# ML datasets
+# =========================
 data/
-.vscode/
+CUB_200_2011/
 *.tgz
-*.weights.
+*.zip
+*.tar
+*.tar.gz
+
+
+# =========================
+# Large ML artifacts
+# =========================
+*.h5
+*.keras
+*.ckpt
+*.weights.h5
+
+*.npy
+*.npz
+*.pkl
+*.pickle
+
+
+# =========================
+# TensorFlow
+# =========================
+logs/
+runs/
+tensorboard/
+checkpoint/
+
+
+# =========================
+# Generated outputs
+# =========================
+*.png
+*.jpg
+*.jpeg
+
+# allow README images if you add them
+!docs/*.png
+!docs/*.jpg
+
+
+# =========================
+# OS / IDE
+# =========================
+.DS_Store
+Thumbs.db
+
+.vscode/
+.idea/
+
+
+# =========================
+# Streamlit
+# =========================
+.streamlit/secrets.toml
