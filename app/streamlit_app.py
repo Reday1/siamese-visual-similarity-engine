@@ -1,141 +1,112 @@
 """
-Streamlit frontend for the Siamese Visual Similarity Engine.
-
-Run from the project root:
-    streamlit run app/streamlit_app.py
+Premium Streamlit frontend for Siamese Visual Similarity Engine.
+Drop-in replacement for app/streamlit_app.py
 """
-
-import sys, os, tempfile
+import os, sys, tempfile
 from pathlib import Path
-
-# ── Resolve project root (one level above app/) ─────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-# retrieval.py does `from model import *` so src/ must be importable
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
-from retrieval import retrieve  # noqa: E402  (after sys.path fix)
 import streamlit as st
 
-# ── Paths ────────────────────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+from retrieval import retrieve
+
 DATA_DIR = PROJECT_ROOT / "data" / "CUB_200_2011"
 
-# ── Page config ──────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Siamese Visual Similarity Engine",
-    page_icon="🐦",
-    layout="wide",
-)
+st.set_page_config(page_title="Visual Similarity Engine", page_icon="🐦", layout="wide")
 
-# ── Custom CSS ───────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* card for each result */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
-        background: rgba(255,255,255,0.03);
-        border-radius: 12px;
-        padding: 0.6rem;
-    }
-    .distance-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        color: #7fdbca;
-        padding: 4px 12px;
-        border-radius: 8px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.85rem;
-        margin-top: 4px;
-    }
-    .species-name {
-        font-weight: 600;
-        font-size: 0.95rem;
-        margin-top: 6px;
-        color: #e0e0e0;
-    }
+html,body,[data-testid="stAppViewContainer"]{background:#f6f8fc;}
+.block-container{padding-top:1.2rem;max-width:1400px;}
+.hero{padding:2.2rem;border-radius:22px;background:linear-gradient(135deg,#4f46e5,#06b6d4);
+color:#fff;box-shadow:0 18px 40px rgba(0,0,0,.15);margin-bottom:1.4rem;}
+.upload{border:2px dashed #b8c3ff;padding:1rem;border-radius:18px;background:#fff;}
+.card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.08);
+transition:.25s;}
+.card:hover{transform:translateY(-6px);}
+img{border-radius:14px;}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header ───────────────────────────────────────────────────────────────
-st.title("🐦 Siamese Visual Similarity Engine")
-st.markdown(
-    "Upload a bird photo and the system retrieves the **most visually similar** "
-    "birds from the CUB-200 dataset using learned embedding distances — "
-    "no class labels needed."
-)
+st.markdown("""<div class="hero">
+<h1>🐦 Siamese Visual Similarity Engine</h1>
+<p>Upload a bird image and retrieve the most visually similar birds using Siamese Neural Network embeddings.</p>
+</div>""", unsafe_allow_html=True)
 
-# ── Sidebar controls ────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("Settings")
-    k = st.slider("Number of results", min_value=1, max_value=20, value=5)
-    st.markdown("---")
-    st.info("💡 **Lower distance = higher visual similarity.**")
+    st.header("⚙ Settings")
+    k=st.slider("Top Results",1,20,5)
+    st.info("Lower distance = higher visual similarity.")
+    st.divider()
+    st.markdown("**Dataset**\n\nCUB-200-2011")
+    st.markdown("**Embedding**\n\nSiamese CNN")
 
-# ── Upload ───────────────────────────────────────────────────────────────
-uploaded = st.file_uploader(
-    "Upload a query image",
-    type=["jpg", "jpeg", "png"],
-    help="Accepts JPG or PNG bird photos.",
-)
+st.markdown('<div class="upload">',unsafe_allow_html=True)
+uploaded=st.file_uploader("Upload a JPG or PNG image",type=["jpg","jpeg","png"])
+st.markdown("</div>",unsafe_allow_html=True)
 
-if uploaded is not None:
-    # Show the query image
-    st.subheader("Query image")
-    st.image(uploaded, width=300)
+if uploaded:
+    left,right=st.columns([1,2],gap="large")
+    with left:
+        st.subheader("Query")
+        st.image(uploaded,use_container_width=True)
 
-    # Write to a temp file so retrieve() can read it by path
-    suffix = Path(uploaded.name).suffix
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+    suffix=Path(uploaded.name).suffix
+    with tempfile.NamedTemporaryFile(delete=False,suffix=suffix) as tmp:
         tmp.write(uploaded.getvalue())
-        tmp_path = tmp.name
+        tmp_path=tmp.name
 
-    # ── Retrieve ─────────────────────────────────────────────────────────
     try:
-        with st.spinner("Computing embedding & searching..."):
-            results = retrieve(tmp_path, k=k)
+        with st.spinner("🧠 Extracting embeddings and searching..."):
+            results=retrieve(tmp_path,k=k)
     except Exception as e:
-        os.unlink(tmp_path)
-        st.error(f"Could not process this image. Make sure it's a valid JPEG or PNG.\n\nDetails: {e}")
+        st.error(f"Could not process the image.\n\nDetails: {e}")
         st.stop()
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-    # ── Display results ──────────────────────────────────────────────────
-    st.subheader(f"Top {len(results)} similar birds")
-    cols = st.columns(min(len(results), 5))
+    if not results:
+        st.warning("No similar images were found.")
+        st.stop()
 
-    for i, item in enumerate(results):
-        col = cols[i % len(cols)]
-        species_raw = item["species"]
-        # "062.Herring_Gull" -> "Herring Gull"
-        species_display = species_raw.split(".", 1)[-1].replace("_", " ")
-        distance = item["distance"]
+    best=results[0]
+    with right:
+        a,b,c=st.columns(3)
+        a.metric("Results",len(results))
+        b.metric("Top Species",best["species"].split(".",1)[-1].replace("_"," "))
+        c.metric("Distance",f"{best['distance']:.4f}")
 
-        with col:
-            # Prefer remote HF URL (works on Cloud without storing images in repo)
-            # Fall back to local path for local dev
+    st.subheader("🏆 Best Match")
+    if "url" in best:
+        st.image(best["url"],width=500)
+    else:
+        p=DATA_DIR/best["path"]
+        if p.exists():
+            st.image(str(p),width=500)
+        else:
+            st.warning(f"Image not found: {p.name}")
+    st.success(f"Distance: {best['distance']:.4f}")
+
+    st.subheader("All Retrieved Matches")
+    cols=st.columns(min(5,len(results)))
+    for i,item in enumerate(results):
+        with cols[i%len(cols)]:
+            st.markdown('<div class="card">',unsafe_allow_html=True)
             if "url" in item:
-                st.image(item["url"], use_container_width=True)
+                st.image(item["url"],use_container_width=True)
             else:
-                img_path = DATA_DIR / item["path"]
-                if img_path.exists():
-                    st.image(str(img_path), use_container_width=True)
+                p=DATA_DIR/item["path"]
+                if p.exists():
+                    st.image(str(p),use_container_width=True)
                 else:
-                    st.warning(f"Image not found:\n{img_path.name}")
-
-            st.markdown(
-                f'<p class="species-name">{species_display}</p>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f'<span class="distance-badge">d = {distance:.4f}</span>',
-                unsafe_allow_html=True,
-            )
-
-    # ── Footer note ──────────────────────────────────────────────────────
-    st.caption("Lower distance means higher visual similarity.")
+                    st.warning(p.name)
+            st.markdown(f"**{item['species'].split('.',1)[-1].replace('_',' ')}**")
+            st.progress(max(1,min(100,int(max(0,1-item["distance"])*100))))
+            st.caption(f"Distance: {item['distance']:.4f}")
+            st.markdown("</div>",unsafe_allow_html=True)
 else:
-    st.markdown(
-        "<br><p style='text-align:center; color:#888;'>"
-        "👆 Upload a bird photo above to get started.</p>",
-        unsafe_allow_html=True,
-    )
+    st.info("👆 Upload an image to start retrieval.")
+
+st.divider()
+st.caption("Built with Streamlit • Siamese Network • CUB-200-2011")
